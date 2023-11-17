@@ -1,0 +1,9 @@
+{
+    "python.defaultInterpreterPath": "D:\\common_program\\miniconda3\\envs\\me\\python.exe",
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.autopep8",
+        "editor.formatOnSave": false
+    },
+    "editor.minimap.enabled": false,
+    "explorer.autoReveal": false,
+}
