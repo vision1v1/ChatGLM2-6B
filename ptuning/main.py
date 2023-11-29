@@ -102,10 +102,10 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    # Load pretrained model and tokenizer
+    # Load pretrained model and tokenizer # trust_remote_code=True, 如果缺失文件是否从远程下载
     config = AutoConfig.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
-    config.pre_seq_len = model_args.pre_seq_len
-    config.prefix_projection = model_args.prefix_projection
+    config.pre_seq_len = model_args.pre_seq_len # ptuning技术，在前面插入的多少个token，这里是128
+    config.prefix_projection = model_args.prefix_projection# 在前面添加promt提示词，相当是大模型的问题，数据中的content可以理解成场景。希望模型提供问题。 
 
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, trust_remote_code=True)
 
@@ -213,10 +213,10 @@ def main():
         return model_inputs
     
     def print_dataset_example(example):
-        print("input_ids", example["input_ids"])
-        print("inputs", tokenizer.decode(example["input_ids"]))
-        print("label_ids", example["labels"])
-        print("labels", tokenizer.decode(example["labels"]))
+        print("input_ids=", example["input_ids"], sep='\n', end='\n\n')
+        print("inputs=", tokenizer.decode(example["input_ids"]), sep='\n', end='\n\n')
+        print("label_ids=", example["labels"], sep='\n', end='\n\n')
+        print("labels=", tokenizer.decode(example["labels"]), sep='\n', end='\n\n')
 
     if training_args.do_train:
         if "train" not in raw_datasets:
