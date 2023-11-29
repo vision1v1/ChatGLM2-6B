@@ -13,7 +13,9 @@
                 "--prompt_column", "content",
                 "--response_column", "summary",
                 "--overwrite_cache",
-                "--model_name_or_path", "/root/data/pretrained/THUDM/chatglm2-6b",
+                "--model_name_or_path", 
+                // "/root/data/pretrained/THUDM/chatglm2-6b", // for linux
+                "C:/data/pretrained/THUDM/chatglm2-6b", // for windows
                 "--output_dir", "output/adgen-chatglm2-6b-pt-128-2e-2",
                 "--overwrite_output_dir",
                 "--max_source_length", "64",
