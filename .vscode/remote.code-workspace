@@ -5,6 +5,16 @@
         }
     ],
     "settings": {
+        "workbench.colorCustomizations": {
+			"editorLineNumber.foreground": "#00ff91",
+			"scrollbarSlider.activeBackground": "#10f308af",
+        	"scrollbarSlider.hoverBackground": "#10f308af",
+        	"scrollbarSlider.background":"#d9ff00"
+		},
+        "workbench.editorAssociations": {
+			"*.md":"vscode.markdown.preview.editor" // markdown 文档默认预览打开
+		},
+
         "python.defaultInterpreterPath": "/root/miniconda3/bin/python3.8",
         "[python]": {
             "editor.defaultFormatter": "ms-python.autopep8",
