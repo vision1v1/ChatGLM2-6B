@@ -16,7 +16,7 @@
 		},
 
 
-        "python.defaultInterpreterPath": "D:/common_program/miniconda3/envs/me/python.exe",
+        "python.defaultInterpreterPath": "D:/common_program/miniconda3/envs/glm/python.exe",
         "[python]": {
             "editor.defaultFormatter": "ms-python.autopep8",
             "editor.formatOnSave": false
