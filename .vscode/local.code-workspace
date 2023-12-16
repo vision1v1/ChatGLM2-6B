@@ -2,6 +2,9 @@
     "folders": [
         {
             "path": ".."
+        },
+        {
+            "path": "D:/data/pretrained/THUDM/chatglm2-6b"
         }
     ],
     "settings": {
@@ -41,7 +44,7 @@
                     "--prompt_column", "content",
                     "--response_column", "summary",
                     "--overwrite_cache",
-                    "--model_name_or_path", "C:/data/pretrained/THUDM/chatglm2-6b",
+                    "--model_name_or_path", "${env:my_data_dir}/pretrained/THUDM/chatglm2-6b",
                     "--output_dir", "output/adgen-chatglm2-6b-pt-128-2e-2",
                     "--overwrite_output_dir",
                     "--max_source_length", "64",
@@ -62,5 +65,15 @@
             },
         ],
         "compounds": []
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "print",
+                "command": "echo ${workspaceFolder} ${env:my_data_dir}", 
+                "type": "shell",
+            }
+        ]
     }
 }
