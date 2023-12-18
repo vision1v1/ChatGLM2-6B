@@ -1,10 +1,12 @@
 {
     "folders": [
         {
+            "name": "ChatGLM2-6B",
             "path": ".."
         },
         {
-            "path": "D:/data/pretrained/THUDM/chatglm2-6b"
+            "name": "THUDM",
+            "path": "c:/data/pretrained/THUDM"
         }
     ],
     "settings": {
@@ -35,7 +37,7 @@
                 "name": "main.py",
                 "type": "python",
                 "request": "launch",
-                "program": "${workspaceFolder}/ptuning/main.py",
+                "program": "${workspaceFolder:ChatGLM2-6B}/ptuning/main.py",
                 "args": [
                     "--do_train",
                     "--train_file", "AdvertiseGen/train.json",
@@ -60,9 +62,17 @@
                     "--pre_seq_len", "128", // 预测长度
                     // "--quantization_bit", "4"
                 ],
-                "cwd": "${workspaceFolder}/ptuning",
+                "cwd": "${workspaceFolder:ChatGLM2-6B}/ptuning",
                 "justMyCode": false
             },
+            {
+                "name": "test.py",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder:ChatGLM2-6B}/debug/test.py",
+                "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
+                "justMyCode": true
+            }
         ],
         "compounds": []
     },
