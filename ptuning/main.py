@@ -75,7 +75,7 @@ def main():
 
     # Log on each process the small summary:
     logger.warning(
-        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}, "
         + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {training_args}")
@@ -189,23 +189,23 @@ def main():
                 query, answer = examples[prompt_column][i], examples[response_column][i]
 
                 history = examples[history_column][i] if history_column is not None else None
-                prompt = tokenizer.build_prompt(query, history)
+                prompt = tokenizer.build_prompt(query, history) # 就是将问题与历史信息拼接起来，作为提示词。
 
-                prompt = prefix + prompt
-                a_ids = tokenizer.encode(text=prompt, add_special_tokens=True, truncation=True,
+                prompt = prefix + prompt # 这里的前缀也起到了提示作用，这里没用上就是''
+                a_ids = tokenizer.encode(text=prompt, add_special_tokens=True, truncation=True, # 提示词的ids
                                          max_length=data_args.max_source_length)
-                b_ids = tokenizer.encode(text=answer, add_special_tokens=False, truncation=True,
+                b_ids = tokenizer.encode(text=answer, add_special_tokens=False, truncation=True, # 答案的ids
                                          max_length=data_args.max_target_length)
 
-                context_length = len(a_ids)
-                input_ids = a_ids + b_ids + [tokenizer.eos_token_id]
-                labels = [tokenizer.pad_token_id] * context_length + b_ids + [tokenizer.eos_token_id]
+                context_length = len(a_ids) # 上下文长度
+                input_ids = a_ids + b_ids + [tokenizer.eos_token_id] # 提示词 + 答案 + 结束词
+                labels = [tokenizer.pad_token_id] * context_length + b_ids + [tokenizer.eos_token_id] # 填充 + 答案 + 结束词
                 
                 pad_len = max_seq_length - len(input_ids)
-                input_ids = input_ids + [tokenizer.pad_token_id] * pad_len
-                labels = labels + [tokenizer.pad_token_id] * pad_len
+                input_ids = input_ids + [tokenizer.pad_token_id] * pad_len # input_ids 对齐到最大长度
+                labels = labels + [tokenizer.pad_token_id] * pad_len # labels 对齐到最大长度
                 if data_args.ignore_pad_token_for_loss:
-                    labels = [(l if l != tokenizer.pad_token_id else -100) for l in labels]
+                    labels = [(l if l != tokenizer.pad_token_id else -100) for l in labels] # labels中pad的词忽略掉，不计算loss
 
                 model_inputs["input_ids"].append(input_ids)
                 model_inputs["labels"].append(labels)
@@ -345,7 +345,7 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         # elif last_checkpoint is not None:
         #     checkpoint = last_checkpoint
-        model.gradient_checkpointing_enable()
+        model.gradient_checkpointing_enable() # ？
         model.enable_input_require_grads()
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         # trainer.save_model()  # Saves the tokenizer too for easy upload
