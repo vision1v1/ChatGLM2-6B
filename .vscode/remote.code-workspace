@@ -7,6 +7,9 @@
         {
             "name": "THUDM",
             "path": "/root/data/pretrained/THUDM"
+        },
+        {
+            "path": "/root/.cache/huggingface/modules/transformers_modules"
         }
     ],
     "settings": {
