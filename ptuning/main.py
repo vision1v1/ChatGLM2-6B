@@ -180,7 +180,7 @@ def main():
     def preprocess_function_train(examples):
         max_seq_length = data_args.max_source_length + data_args.max_target_length + 1
 
-        model_inputs = {
+        model_inputs = { # datasets map 返回要求
             "input_ids": [],
             "labels": [],
         }
@@ -276,7 +276,7 @@ def main():
 
     # Data collator
     label_pad_token_id = -100 if data_args.ignore_pad_token_for_loss else tokenizer.pad_token_id
-    data_collator = DataCollatorForSeq2Seq(
+    data_collator = DataCollatorForSeq2Seq( # TODO 这个需要熟悉一下
         tokenizer,
         model=model,
         label_pad_token_id=label_pad_token_id,
@@ -345,7 +345,7 @@ def main():
             checkpoint = training_args.resume_from_checkpoint
         # elif last_checkpoint is not None:
         #     checkpoint = last_checkpoint
-        model.gradient_checkpointing_enable() # ？
+        model.gradient_checkpointing_enable() # TODO ？
         model.enable_input_require_grads()
         train_result = trainer.train(resume_from_checkpoint=checkpoint)
         # trainer.save_model()  # Saves the tokenizer too for easy upload
