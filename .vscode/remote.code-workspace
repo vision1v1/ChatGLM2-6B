@@ -43,7 +43,7 @@
                     "--do_train",
                     "--train_file", "AdvertiseGen/train.json",
                     "--validation_file", "AdvertiseGen/dev.json",
-                    "--preprocessing_num_workers", "10",
+                    "--preprocessing_num_workers", "1",
                     "--prompt_column", "content",
                     "--response_column", "summary",
                     "--overwrite_cache",
@@ -61,6 +61,7 @@
                     "--save_steps", "1000",
                     "--learning_rate", "2e-2",
                     "--pre_seq_len", "128", // 预测长度
+                    "--max_train_samples", "1000", // 为了方便调试将训练样本调整到1000
                     // "--quantization_bit", "4"
                 ],
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/ptuning",
