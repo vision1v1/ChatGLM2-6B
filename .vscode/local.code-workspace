@@ -72,6 +72,14 @@
                 "program": "${workspaceFolder:ChatGLM2-6B}/debug/test.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
                 "justMyCode": true
+            },
+            {
+                "name": "debug_model.py",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_model.py",
+                "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
+                "justMyCode": true
             }
         ],
         "compounds": []
