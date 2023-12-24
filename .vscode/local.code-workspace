@@ -6,7 +6,7 @@
         },
         {
             "name": "THUDM",
-            "path": "c:/data/pretrained/THUDM"
+            "path": "d:/data/pretrained/THUDM"
         }
     ],
     "settings": {
@@ -79,7 +79,7 @@
                 "request": "launch",
                 "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_model.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
-                "justMyCode": true
+                "justMyCode": false
             }
         ],
         "compounds": []
