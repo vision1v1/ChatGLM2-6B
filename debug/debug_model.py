@@ -1,9 +1,10 @@
 from transformers import DataCollatorForSeq2Seq
+from transformers.modeling_outputs import CausalLMOutputWithPast
 from torch.utils.data import DataLoader
 from modeling_chatglm import ChatGLMForConditionalGeneration
 from tokenization_chatglm import ChatGLMTokenizer
 from configuration_chatglm import ChatGLMConfig
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 import os
 data_dir = os.getenv("my_data_dir")
 
@@ -18,10 +19,9 @@ def main():
 
     raw_datasets = load_dataset(extension,
                                 data_files=data_files,
-                                cache_dir=None,
-                                use_auth_token=None)
+                                cache_dir=None)
 
-    print(raw_datasets)
+    print("type(raw_datasets) = ", type(raw_datasets))
 
     vocab_file = os.path.join(data_dir, 'pretrained', 'THUDM', 'chatglm2-6b', 'tokenizer.model')
     tokenizer = ChatGLMTokenizer(vocab_file=vocab_file)
@@ -72,7 +72,8 @@ def main():
 
         return model_inputs
 
-    train_dataset = raw_datasets["train"]
+    train_dataset: Dataset = raw_datasets["train"].select(range(100))  # 方便调试这里就用100条，喂给下面处理
+    print("type(train_dataset) = ", type(train_dataset))
     train_dataset = train_dataset.map(preprocess_function_train,
                                       batched=True,
                                       num_proc=preprocessing_num_workers,
@@ -88,13 +89,11 @@ def main():
 
     print_dataset_example(train_dataset[0])
 
-
     config = ChatGLMConfig(num_layers=2,
                            num_attention_heads=2)
-    config.original_rope = True # 复制配置文件中的
-    config.use_cache = True # 复制配置文件中的
+    config.original_rope = True  # 复制配置文件中的
+    config.use_cache = True  # 复制配置文件中的
     model = ChatGLMForConditionalGeneration(config=config)
-
 
     label_pad_token_id = -100 if ignore_pad_token_for_loss else tokenizer.pad_token_id
     data_collator = DataCollatorForSeq2Seq(  # TODO 这个需要熟悉一下
@@ -106,16 +105,14 @@ def main():
     )
 
     train_dataloader = DataLoader(dataset=train_dataset,
-                                  batch_size=1, 
+                                  batch_size=1,
                                   collate_fn=data_collator)
-    
+
     # 可以调试数据输入，到模型输出了
-    for feature in train_dataloader:
-        output = model.forward(**feature)
+    for feature in train_dataloader:  # {"input_ids":..., "labels":..., "attention_mask":..., "position_ids":...}
+        output: CausalLMOutputWithPast = model.forward(**feature)
         print(output)
         break
-
-    
 
     ...
 
