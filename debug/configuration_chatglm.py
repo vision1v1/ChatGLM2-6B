@@ -11,7 +11,7 @@ class ChatGLMConfig(PretrainedConfig):
         ffn_hidden_size=13696,
         kv_channels=128,
         num_attention_heads=32,
-        seq_length=2048,
+        seq_length=2048, # 这个是最大句子长度
         hidden_dropout=0.0,
         classifier_dropout=None,
         attention_dropout=0.0,
