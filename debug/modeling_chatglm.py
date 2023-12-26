@@ -72,11 +72,9 @@ class PrefixEncoder(torch.nn.Module):
             # Use a two-layer MLP to encode the prefix
             kv_size = config.num_layers * config.kv_channels * config.multi_query_group_num * 2
             self.embedding = torch.nn.Embedding(config.pre_seq_len, kv_size)
-            self.trans = torch.nn.Sequential(
-                torch.nn.Linear(kv_size, config.hidden_size),
-                torch.nn.Tanh(),
-                torch.nn.Linear(config.hidden_size, kv_size)
-            )
+            self.trans = torch.nn.Sequential(torch.nn.Linear(kv_size, config.hidden_size),
+                                             torch.nn.Tanh(),
+                                             torch.nn.Linear(config.hidden_size, kv_size))
         else:
             self.embedding = torch.nn.Embedding(config.pre_seq_len,
                                                 config.num_layers * config.kv_channels * config.multi_query_group_num * 2)
@@ -90,11 +88,9 @@ class PrefixEncoder(torch.nn.Module):
         return past_key_values
 
 
-def split_tensor_along_last_dim(
-        tensor: torch.Tensor,
-        num_partitions: int,
-        contiguous_split_chunks: bool = False,
-) -> List[torch.Tensor]:
+def split_tensor_along_last_dim(tensor: torch.Tensor,
+                                num_partitions: int,
+                                contiguous_split_chunks: bool = False) -> List[torch.Tensor]:
     """Split a tensor along its last dimension.
 
     Arguments:
@@ -126,25 +122,23 @@ class RotaryEmbedding(nn.Module):
         self.dim = dim
         self.original_impl = original_impl
 
-    def forward_impl(
-            self, seq_len: int, n_elem: int, dtype: torch.dtype, device: torch.device, base: int = 10000
-    ):
+    def forward_impl(self, seq_len: int, n_elem: int, dtype: torch.dtype, device: torch.device, base: int = 10000):
         """Enhanced Transformer with Rotary Position Embedding.
-
-        Derived from: https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/labml_nn/
-        transformers/rope/__init__.py. MIT License:
+        Derived from: 
+        https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/labml_nn/transformers/rope/__init__.py. 
+        MIT License:
         https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/license.
         """
         # $\Theta = {\theta_i = 10000^{\frac{2(i-1)}{d}}, i \in [1, 2, ..., \frac{d}{2}]}$
-        theta = 1.0 / (base ** (torch.arange(0, n_elem, 2, dtype=dtype, device=device) / n_elem))
+        theta = 1.0 / (base ** (torch.arange(0, n_elem, 2, dtype=dtype, device=device) / n_elem)) # n_elem 是 dim_q
 
         # Create position indexes `[0, 1, ..., seq_len - 1]`
         seq_idx = torch.arange(seq_len, dtype=dtype, device=device)
 
         # Calculate the product of position index and $\theta_i$
-        idx_theta = torch.outer(seq_idx, theta).float()
-
-        cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1)
+        idx_theta = torch.outer(seq_idx, theta).float()  # torch.outer(a,b) 计算内积，相当于 a.T @ b
+        # 可以参考 https://kexue.fm/archives/8265 提升稀疏矩阵的效率
+        cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1) # (seq_len, n_elem//2, 2)
 
         # this is to mimic the behaviour of complex32, else we will get different results
         if dtype in (torch.float16, torch.bfloat16, torch.int8):
@@ -152,9 +146,7 @@ class RotaryEmbedding(nn.Module):
         return cache
 
     def forward(self, max_seq_len, offset=0):
-        return self.forward_impl(
-            max_seq_len, self.dim, dtype=self.inv_freq.dtype, device=self.inv_freq.device
-        )
+        return self.forward_impl(max_seq_len, self.dim, dtype=self.inv_freq.dtype, device=self.inv_freq.device)
 
 
 @torch.jit.script
@@ -223,12 +215,16 @@ class CoreAttention(torch.nn.Module):
         if pytorch_major_version >= 2:
             query_layer, key_layer, value_layer = [k.permute(1, 2, 0, 3) for k in [query_layer, key_layer, value_layer]]
             if attention_mask is None and query_layer.shape[2] == key_layer.shape[2]:
-                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer, key_layer, value_layer,
+                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer,
+                                                                                 key_layer,
+                                                                                 value_layer,
                                                                                  is_causal=True)
             else:
                 if attention_mask is not None:
                     attention_mask = ~attention_mask
-                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer, key_layer, value_layer,
+                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer,
+                                                                                 key_layer,
+                                                                                 value_layer,
                                                                                  attention_mask)
             context_layer = context_layer.permute(2, 0, 1, 3)
             new_context_layer_shape = context_layer.size()[:-2] + (self.hidden_size_per_partition,)
@@ -245,19 +241,18 @@ class CoreAttention(torch.nn.Module):
             key_layer = key_layer.view(output_size[3], output_size[0] * output_size[1], -1)
 
             # preallocting input tensor: [b * np, sq, sk]
-            matmul_input_buffer = torch.empty(
-                output_size[0] * output_size[1], output_size[2], output_size[3], dtype=query_layer.dtype,
-                device=query_layer.device
-            )
+            matmul_input_buffer = torch.empty(output_size[0] * output_size[1],
+                                              output_size[2],
+                                              output_size[3],
+                                              dtype=query_layer.dtype,
+                                              device=query_layer.device)
 
             # Raw attention scores. [b * np, sq, sk]
-            matmul_result = torch.baddbmm(
-                matmul_input_buffer,
-                query_layer.transpose(0, 1),  # [b * np, sq, hn]
-                key_layer.transpose(0, 1).transpose(1, 2),  # [b * np, hn, sk]
-                beta=0.0,
-                alpha=(1.0 / self.norm_factor),
-            )
+            matmul_result = torch.baddbmm(matmul_input_buffer,
+                                          query_layer.transpose(0, 1),  # [b * np, sq, hn]
+                                          key_layer.transpose(0, 1).transpose(1, 2),  # [b * np, hn, sk]
+                                          beta=0.0,
+                                          alpha=(1.0 / self.norm_factor))
 
             # change view to [b, np, sq, sk]
             attention_scores = matmul_result.view(*output_size)
@@ -334,17 +329,18 @@ class SelfAttention(torch.nn.Module):
             self.qkv_hidden_size = (
                 self.projection_size + 2 * self.hidden_size_per_attention_head * config.multi_query_group_num
             )
-        self.query_key_value = nn.Linear(config.hidden_size, self.qkv_hidden_size,
+        self.query_key_value = nn.Linear(config.hidden_size,
+                                         self.qkv_hidden_size,
                                          bias=config.add_bias_linear or config.add_qkv_bias,
-                                         device=device, **_config_to_kwargs(config)
-                                         )
+                                         device=device, **_config_to_kwargs(config))
 
         self.core_attention = CoreAttention(config, self.layer_number)
 
         # Output.
-        self.dense = nn.Linear(self.projection_size, config.hidden_size, bias=config.add_bias_linear,
-                               device=device, **_config_to_kwargs(config)
-                               )
+        self.dense = nn.Linear(self.projection_size,
+                               config.hidden_size,
+                               bias=config.add_bias_linear,
+                               device=device, **_config_to_kwargs(config))
 
     def _allocate_memory(self, inference_max_sequence_len, batch_size, device=None, dtype=None):
         if self.multi_query_attention:
@@ -360,9 +356,7 @@ class SelfAttention(torch.nn.Module):
             device=device,
         )
 
-    def forward(
-            self, hidden_states, attention_mask, rotary_pos_emb, kv_cache=None, use_cache=True
-    ):
+    def forward(self, hidden_states, attention_mask, rotary_pos_emb, kv_cache=None, use_cache=True):
         # hidden_states: [sq, b, h]
 
         # =================================================
@@ -519,7 +513,9 @@ class GLMBlock(torch.nn.Module):
 
         LayerNormFunc = RMSNorm if config.rmsnorm else LayerNorm
         # Layernorm on the input data.
-        self.input_layernorm = LayerNormFunc(config.hidden_size, eps=config.layernorm_epsilon, device=device,
+        self.input_layernorm = LayerNormFunc(config.hidden_size,
+                                             eps=config.layernorm_epsilon,
+                                             device=device,
                                              dtype=config.torch_dtype)
 
         # Self attention.
@@ -527,15 +523,15 @@ class GLMBlock(torch.nn.Module):
         self.hidden_dropout = config.hidden_dropout
 
         # Layernorm on the attention output
-        self.post_attention_layernorm = LayerNormFunc(config.hidden_size, eps=config.layernorm_epsilon, device=device,
+        self.post_attention_layernorm = LayerNormFunc(config.hidden_size,
+                                                      eps=config.layernorm_epsilon,
+                                                      device=device,
                                                       dtype=config.torch_dtype)
 
         # MLP
         self.mlp = MLP(config, device=device)
 
-    def forward(
-            self, hidden_states, attention_mask, rotary_pos_emb, kv_cache=None, use_cache=True,
-    ):
+    def forward(self, hidden_states, attention_mask, rotary_pos_emb, kv_cache=None, use_cache=True):
         # hidden_states: [s, b, h]
 
         # Layer norm at the beginning of the transformer layer.
@@ -597,7 +593,9 @@ class GLMTransformer(torch.nn.Module):
         if self.post_layer_norm:
             LayerNormFunc = RMSNorm if config.rmsnorm else LayerNorm
             # Final layer norm before output.
-            self.final_layernorm = LayerNormFunc(config.hidden_size, eps=config.layernorm_epsilon, device=device,
+            self.final_layernorm = LayerNormFunc(config.hidden_size,
+                                                 eps=config.layernorm_epsilon,
+                                                 device=device,
                                                  dtype=config.torch_dtype)
 
         self.gradient_checkpointing = False
@@ -606,7 +604,7 @@ class GLMTransformer(torch.nn.Module):
         return self.layers[layer_number]
 
     def forward(self,
-                hidden_states,
+                hidden_states, # inputs_embeds
                 attention_mask,
                 rotary_pos_emb,
                 kv_caches=None,
@@ -628,22 +626,18 @@ class GLMTransformer(torch.nn.Module):
 
             layer = self._get_layer(index)
             if self.gradient_checkpointing and self.training:
-                layer_ret = torch.utils.checkpoint.checkpoint(
-                    layer,
-                    hidden_states,
-                    attention_mask,
-                    rotary_pos_emb,
-                    kv_caches[index],
-                    use_cache
-                )
+                layer_ret = torch.utils.checkpoint.checkpoint(layer,
+                                                              hidden_states,
+                                                              attention_mask,
+                                                              rotary_pos_emb,
+                                                              kv_caches[index],
+                                                              use_cache)
             else:
-                layer_ret = layer(
-                    hidden_states,
-                    attention_mask,
-                    rotary_pos_emb,
-                    kv_cache=kv_caches[index],
-                    use_cache=use_cache
-                )
+                layer_ret = layer(hidden_states,
+                                  attention_mask,
+                                  rotary_pos_emb,
+                                  kv_cache=kv_caches[index],
+                                  use_cache=use_cache)
             hidden_states, kv_cache = layer_ret
             if use_cache:
                 presents = presents + (kv_cache,)
@@ -709,17 +703,15 @@ class Embedding(torch.nn.Module):
 
         self.hidden_size = config.hidden_size
         # Word embeddings (parallel).
-        self.word_embeddings = nn.Embedding(
-            config.padded_vocab_size,
-            self.hidden_size,
-            dtype=config.torch_dtype,
-            device=device
-        )
+        self.word_embeddings = nn.Embedding(config.padded_vocab_size,
+                                            self.hidden_size,
+                                            dtype=config.torch_dtype,
+                                            device=device)
         self.fp32_residual_connection = config.fp32_residual_connection
 
     def forward(self, input_ids):
         # Embeddings.
-        words_embeddings = self.word_embeddings(input_ids)
+        words_embeddings = self.word_embeddings(input_ids) # (bsz, seq_len, hidden_size)
         embeddings = words_embeddings
         # Data format change to avoid explicit tranposes : [b s h] --> [s b h].
         embeddings = embeddings.transpose(0, 1).contiguous()
@@ -745,13 +737,16 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         self.kv_channels = config.kv_channels
 
         # Rotary positional embeddings
-        self.seq_length = config.seq_length
-        rotary_dim = (
+        self.seq_length = config.seq_length # RoPE 的最大的句子长度。
+        rotary_dim = ( # 每个头的hidden_size
             config.hidden_size // config.num_attention_heads if config.kv_channels is None else config.kv_channels
         )
 
-        self.rotary_pos_emb = RotaryEmbedding(rotary_dim // 2, original_impl=config.original_rope, device=device,
+        self.rotary_pos_emb = RotaryEmbedding(rotary_dim // 2, # q0 q1 为一组，后面一样，两个为一组。
+                                              original_impl=config.original_rope,
+                                              device=device,
                                               dtype=config.torch_dtype)
+
         self.encoder = init_method(GLMTransformer, config, **init_kwargs)
         self.output_layer = init_method(nn.Linear, config.hidden_size, config.padded_vocab_size, bias=False,
                                         dtype=config.torch_dtype, **init_kwargs)
@@ -768,42 +763,39 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         return self.embedding.word_embeddings
 
     def get_prompt(self, batch_size, device, dtype=torch.half):
+        """"""
         prefix_tokens = self.prefix_tokens.unsqueeze(0).expand(batch_size, -1).to(device)
         past_key_values = self.prefix_encoder(prefix_tokens).type(dtype)
-        past_key_values = past_key_values.view(
-            batch_size,
-            self.pre_seq_len,
-            self.num_layers * 2,
-            self.multi_query_group_num,
-            self.kv_channels
-        )
+        past_key_values = past_key_values.view(batch_size,
+                                               self.pre_seq_len,
+                                               self.num_layers * 2,
+                                               self.multi_query_group_num,
+                                               self.kv_channels)
         # seq_len, b, nh, hidden_size
         past_key_values = self.dropout(past_key_values)
         past_key_values = past_key_values.permute([2, 1, 0, 3, 4]).split(2)
         return past_key_values
 
-    def forward(
-            self,
-            input_ids,
-            position_ids: Optional[torch.Tensor] = None,
-            attention_mask: Optional[torch.BoolTensor] = None,
-            full_attention_mask: Optional[torch.BoolTensor] = None,
-            past_key_values: Optional[Tuple[Tuple[torch.Tensor, torch.Tensor], ...]] = None,
-            inputs_embeds: Optional[torch.Tensor] = None,
-            use_cache: Optional[bool] = None,
-            output_hidden_states: Optional[bool] = None,
-            return_dict: Optional[bool] = None,
-    ):
+    def forward(self,
+                input_ids,
+                position_ids: Optional[torch.Tensor] = None,
+                attention_mask: Optional[torch.BoolTensor] = None,
+                full_attention_mask: Optional[torch.BoolTensor] = None,
+                past_key_values: Optional[Tuple[Tuple[torch.Tensor, torch.Tensor], ...]] = None,
+                inputs_embeds: Optional[torch.Tensor] = None,
+                use_cache: Optional[bool] = None,
+                output_hidden_states: Optional[bool] = None,
+                return_dict: Optional[bool] = None):
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        batch_size, seq_length = input_ids.shape
+        batch_size, seq_length = input_ids.shape # （bsz, seq_len）
 
         if inputs_embeds is None:
-            inputs_embeds = self.embedding(input_ids)
+            inputs_embeds = self.embedding(input_ids) # (seq_len, bsz, hidden_size)
 
         if self.pre_seq_len is not None:
             if past_key_values is None:
@@ -815,10 +807,10 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
             if (attention_mask is not None and not attention_mask.all()) or (past_key_values and seq_length != 1):
                 full_attention_mask = self.get_masks(input_ids, past_key_values, padding_mask=attention_mask)
 
-        # Rotary positional embeddings
-        rotary_pos_emb = self.rotary_pos_emb(self.seq_length)
+        # Rotary positional embeddings，这里self.seq_length 是RoPE的最大句子长度。
+        rotary_pos_emb = self.rotary_pos_emb(self.seq_length)  # TODO 旋转位置编码 (seq_len, hidden_size_per_head // 2, 2)
         if position_ids is not None:
-            rotary_pos_emb = rotary_pos_emb[position_ids]
+            rotary_pos_emb = rotary_pos_emb[position_ids] # (bsz, seq_len, )
         else:
             rotary_pos_emb = rotary_pos_emb[None, :seq_length]
         rotary_pos_emb = rotary_pos_emb.transpose(0, 1).contiguous()
@@ -859,13 +851,11 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
         if self.config.quantization_bit:
             self.quantize(self.config.quantization_bit, empty_init=True)
 
-    def _update_model_kwargs_for_generation(
-            self,
-            outputs: ModelOutput,
-            model_kwargs: Dict[str, Any],
-            is_encoder_decoder: bool = False,
-            standardize_cache_format: bool = False,
-    ) -> Dict[str, Any]:
+    def _update_model_kwargs_for_generation(self,
+                                            outputs: ModelOutput,
+                                            model_kwargs: Dict[str, Any],
+                                            is_encoder_decoder: bool = False,
+                                            standardize_cache_format: bool = False) -> Dict[str, Any]:
         # update past_key_values
         model_kwargs["past_key_values"] = self._extract_past_from_model_output(outputs,
                                                                                standardize_cache_format=standardize_cache_format)
@@ -885,16 +875,14 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
         model_kwargs["is_first_forward"] = False
         return model_kwargs
 
-    def prepare_inputs_for_generation(
-            self,
-            input_ids: torch.LongTensor,
-            past_key_values: Optional[torch.Tensor] = None,
-            attention_mask: Optional[torch.Tensor] = None,
-            position_ids: Optional[torch.Tensor] = None,
-            use_cache: Optional[bool] = None,
-            is_first_forward: bool = True,
-            **kwargs
-    ) -> dict:
+    def prepare_inputs_for_generation(self,
+                                      input_ids: torch.LongTensor,
+                                      past_key_values: Optional[torch.Tensor] = None,
+                                      attention_mask: Optional[torch.Tensor] = None,
+                                      position_ids: Optional[torch.Tensor] = None,
+                                      use_cache: Optional[bool] = None,
+                                      is_first_forward: bool = True,
+                                      **kwargs) -> dict:
         # only last token for input_ids if past is not None
         if position_ids is None:
             position_ids = self.get_position_ids(input_ids, device=input_ids.device)
@@ -911,20 +899,18 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
             "use_cache": use_cache
         }
 
-    def forward(
-            self,
-            input_ids: Optional[torch.Tensor] = None,
-            position_ids: Optional[torch.Tensor] = None,
-            attention_mask: Optional[torch.Tensor] = None,
-            past_key_values: Optional[Tuple[torch.FloatTensor]] = None,
-            inputs_embeds: Optional[torch.Tensor] = None,
-            labels: Optional[torch.Tensor] = None,
-            use_cache: Optional[bool] = None,
-            output_attentions: Optional[bool] = None,
-            output_hidden_states: Optional[bool] = None,
-            return_dict: Optional[bool] = None,
-            return_last_logit: Optional[bool] = False,
-    ):
+    def forward(self,
+                input_ids: Optional[torch.Tensor] = None,
+                position_ids: Optional[torch.Tensor] = None,
+                attention_mask: Optional[torch.Tensor] = None,
+                past_key_values: Optional[Tuple[torch.FloatTensor]] = None,
+                inputs_embeds: Optional[torch.Tensor] = None,
+                labels: Optional[torch.Tensor] = None,
+                use_cache: Optional[bool] = None,
+                output_attentions: Optional[bool] = None,
+                output_hidden_states: Optional[bool] = None,
+                return_dict: Optional[bool] = None,
+                return_last_logit: Optional[bool] = False):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -1097,16 +1083,14 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
                     yield response, new_history
 
     @torch.inference_mode()
-    def stream_generate(
-            self,
-            input_ids,
-            generation_config: Optional[GenerationConfig] = None,
-            logits_processor: Optional[LogitsProcessorList] = None,
-            stopping_criteria: Optional[StoppingCriteriaList] = None,
-            prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
-            return_past_key_values=False,
-            **kwargs,
-    ):
+    def stream_generate(self,
+                        input_ids,
+                        generation_config: Optional[GenerationConfig] = None,
+                        logits_processor: Optional[LogitsProcessorList] = None,
+                        stopping_criteria: Optional[StoppingCriteriaList] = None,
+                        prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
+                        return_past_key_values=False,
+                        **kwargs):
         batch_size, input_ids_seq_length = input_ids.shape[0], input_ids.shape[-1]
 
         if generation_config is None:
