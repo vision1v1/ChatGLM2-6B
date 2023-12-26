@@ -14,3 +14,10 @@ ChatGLMForConditionalGeneration ---> 特定任务架构
                 4 MLP
             2 RMSNorm
         4 Linear
+
+
+# RotaryEmbedding
+参考：https://kexue.fm/archives/8265
+
+
+
