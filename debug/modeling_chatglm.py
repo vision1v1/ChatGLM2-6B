@@ -130,7 +130,7 @@ class RotaryEmbedding(nn.Module):
         https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/license.
         """
         # $\Theta = {\theta_i = 10000^{\frac{2(i-1)}{d}}, i \in [1, 2, ..., \frac{d}{2}]}$
-        theta = 1.0 / (base ** (torch.arange(0, n_elem, 2, dtype=dtype, device=device) / n_elem)) # n_elem 是 dim_q
+        theta = 1.0 / (base ** (torch.arange(0, n_elem, 2, dtype=dtype, device=device) / n_elem))  # n_elem 是 dim_q
 
         # Create position indexes `[0, 1, ..., seq_len - 1]`
         seq_idx = torch.arange(seq_len, dtype=dtype, device=device)
@@ -138,7 +138,7 @@ class RotaryEmbedding(nn.Module):
         # Calculate the product of position index and $\theta_i$
         idx_theta = torch.outer(seq_idx, theta).float()  # torch.outer(a,b) 计算内积，相当于 a.T @ b
         # 可以参考 https://kexue.fm/archives/8265 提升稀疏矩阵的效率
-        cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1) # (seq_len, n_elem//2, 2)
+        cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1)  # (seq_len, n_elem//2, 2)
 
         # this is to mimic the behaviour of complex32, else we will get different results
         if dtype in (torch.float16, torch.bfloat16, torch.int8):
@@ -347,14 +347,12 @@ class SelfAttention(torch.nn.Module):
             num_attention_heads = self.num_multi_query_groups_per_partition
         else:
             num_attention_heads = self.num_attention_heads_per_partition
-        return torch.empty(
-            inference_max_sequence_len,
-            batch_size,
-            num_attention_heads,
-            self.hidden_size_per_attention_head,
-            dtype=dtype,
-            device=device,
-        )
+        return torch.empty(inference_max_sequence_len,
+                           batch_size,
+                           num_attention_heads,
+                           self.hidden_size_per_attention_head,
+                           dtype=dtype,
+                           device=device)
 
     def forward(self, hidden_states, attention_mask, rotary_pos_emb, kv_cache=None, use_cache=True):
         # hidden_states: [sq, b, h]
@@ -367,7 +365,7 @@ class SelfAttention(torch.nn.Module):
         # =====================
 
         # Attention heads [sq, b, h] --> [sq, b, (np * 3 * hn)]
-        mixed_x_layer = self.query_key_value(hidden_states)
+        mixed_x_layer = self.query_key_value.forward(hidden_states)
 
         if self.multi_query_attention:
             (query_layer, key_layer, value_layer) = mixed_x_layer.split(
@@ -389,9 +387,7 @@ class SelfAttention(torch.nn.Module):
                 + (self.num_multi_query_groups_per_partition, self.hidden_size_per_attention_head)
             )
         else:
-            new_tensor_shape = mixed_x_layer.size()[:-1] + \
-                (self.num_attention_heads_per_partition,
-                 3 * self.hidden_size_per_attention_head)
+            new_tensor_shape = mixed_x_layer.size()[:-1] + (self.num_attention_heads_per_partition, 3 * self.hidden_size_per_attention_head)
             mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
 
             # [sq, b, np, 3 * hn] --> 3 [sq, b, np, hn]
@@ -432,13 +428,13 @@ class SelfAttention(torch.nn.Module):
         # core attention computation
         # ==================================
 
-        context_layer = self.core_attention(query_layer, key_layer, value_layer, attention_mask)
+        context_layer = self.core_attention.forward(query_layer, key_layer, value_layer, attention_mask)
 
         # =================
         # Output. [sq, b, h]
         # =================
 
-        output = self.dense(context_layer)
+        output = self.dense.forward(context_layer)
 
         return output, kv_cache
 
@@ -537,13 +533,11 @@ class GLMBlock(torch.nn.Module):
         # Layer norm at the beginning of the transformer layer.
         layernorm_output = self.input_layernorm(hidden_states)
         # Self attention.
-        attention_output, kv_cache = self.self_attention(
-            layernorm_output,
-            attention_mask,
-            rotary_pos_emb,
-            kv_cache=kv_cache,
-            use_cache=use_cache
-        )
+        attention_output, kv_cache = self.self_attention.forward(layernorm_output,
+                                                                 attention_mask,
+                                                                 rotary_pos_emb,
+                                                                 kv_cache=kv_cache,
+                                                                 use_cache=use_cache)
 
         # Residual connection.
         if self.apply_residual_connection_post_layernorm:
@@ -604,7 +598,7 @@ class GLMTransformer(torch.nn.Module):
         return self.layers[layer_number]
 
     def forward(self,
-                hidden_states, # inputs_embeds
+                hidden_states,  # inputs_embeds
                 attention_mask,
                 rotary_pos_emb,
                 kv_caches=None,
@@ -633,11 +627,11 @@ class GLMTransformer(torch.nn.Module):
                                                               kv_caches[index],
                                                               use_cache)
             else:
-                layer_ret = layer(hidden_states,
-                                  attention_mask,
-                                  rotary_pos_emb,
-                                  kv_cache=kv_caches[index],
-                                  use_cache=use_cache)
+                layer_ret = layer.forward(hidden_states,
+                                          attention_mask,
+                                          rotary_pos_emb,
+                                          kv_cache=kv_caches[index],
+                                          use_cache=use_cache)
             hidden_states, kv_cache = layer_ret
             if use_cache:
                 presents = presents + (kv_cache,)
@@ -711,7 +705,7 @@ class Embedding(torch.nn.Module):
 
     def forward(self, input_ids):
         # Embeddings.
-        words_embeddings = self.word_embeddings(input_ids) # (bsz, seq_len, hidden_size)
+        words_embeddings = self.word_embeddings(input_ids)  # (bsz, seq_len, hidden_size)
         embeddings = words_embeddings
         # Data format change to avoid explicit tranposes : [b s h] --> [s b h].
         embeddings = embeddings.transpose(0, 1).contiguous()
@@ -737,12 +731,12 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         self.kv_channels = config.kv_channels
 
         # Rotary positional embeddings
-        self.seq_length = config.seq_length # RoPE 的最大的句子长度。
-        rotary_dim = ( # 每个头的hidden_size
+        self.seq_length = config.seq_length  # RoPE 的最大的句子长度。
+        rotary_dim = (  # 每个头的hidden_size
             config.hidden_size // config.num_attention_heads if config.kv_channels is None else config.kv_channels
         )
 
-        self.rotary_pos_emb = RotaryEmbedding(rotary_dim // 2, # q0 q1 为一组，后面一样，两个为一组。
+        self.rotary_pos_emb = RotaryEmbedding(rotary_dim // 2,  # q0 q1 为一组，后面一样，两个为一组。
                                               original_impl=config.original_rope,
                                               device=device,
                                               dtype=config.torch_dtype)
@@ -792,10 +786,10 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        batch_size, seq_length = input_ids.shape # （bsz, seq_len）
+        batch_size, seq_length = input_ids.shape  # （bsz, seq_len）
 
         if inputs_embeds is None:
-            inputs_embeds = self.embedding(input_ids) # (seq_len, bsz, hidden_size)
+            inputs_embeds = self.embedding.forward(input_ids)  # (seq_len, bsz, hidden_size)
 
         if self.pre_seq_len is not None:
             if past_key_values is None:
@@ -807,10 +801,10 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
             if (attention_mask is not None and not attention_mask.all()) or (past_key_values and seq_length != 1):
                 full_attention_mask = self.get_masks(input_ids, past_key_values, padding_mask=attention_mask)
 
-        # Rotary positional embeddings，这里self.seq_length 是RoPE的最大句子长度。
-        rotary_pos_emb = self.rotary_pos_emb(self.seq_length)  # TODO 旋转位置编码 (seq_len, hidden_size_per_head // 2, 2)
+        # Rotary positional embeddings，这里self.seq_length 是RoPE能编码的最大句子长度。
+        rotary_pos_emb = self.rotary_pos_emb.forward(self.seq_length)  # TODO 旋转位置编码 (seq_len, hidden_size_per_head // 2, 2)
         if position_ids is not None:
-            rotary_pos_emb = rotary_pos_emb[position_ids] # (bsz, seq_len, )
+            rotary_pos_emb = rotary_pos_emb[position_ids]  # (bsz, seq_len, )
         else:
             rotary_pos_emb = rotary_pos_emb[None, :seq_length]
         rotary_pos_emb = rotary_pos_emb.transpose(0, 1).contiguous()
@@ -914,16 +908,14 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        transformer_outputs = self.transformer(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            attention_mask=attention_mask,
-            past_key_values=past_key_values,
-            inputs_embeds=inputs_embeds,
-            use_cache=use_cache,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        transformer_outputs = self.transformer(input_ids=input_ids,
+                                               position_ids=position_ids,
+                                               attention_mask=attention_mask,
+                                               past_key_values=past_key_values,
+                                               inputs_embeds=inputs_embeds,
+                                               use_cache=use_cache,
+                                               output_hidden_states=output_hidden_states,
+                                               return_dict=return_dict)
 
         hidden_states = transformer_outputs[0]
         if return_last_logit:
