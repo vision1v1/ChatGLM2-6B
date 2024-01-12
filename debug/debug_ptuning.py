@@ -44,7 +44,7 @@ def main():
             "input_ids": [],
             "labels": [],
         }
-        for i in range(len(examples[prompt_column])):
+        for i in range(len(examples[prompt_column])): # {"content":..., "summary":...}
             if examples[prompt_column][i] and examples[response_column][i]:
                 query, answer = examples[prompt_column][i], examples[response_column][i]
 
