@@ -168,9 +168,7 @@ class ChatGLMTokenizer(PreTrainedTokenizer):
         prompt += "[Round {}]\n\n问：{}\n\n答：".format(len(history) + 1, query)
         return prompt
 
-    def build_inputs_with_special_tokens(
-            self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
-    ) -> List[int]:
+    def build_inputs_with_special_tokens(self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None) -> List[int]:
         """
         Build model inputs from a sequence or a pair of sequence for sequence classification tasks by concatenating and
         adding special tokens. A BERT sequence has the following format:
@@ -193,14 +191,12 @@ class ChatGLMTokenizer(PreTrainedTokenizer):
             token_ids_0 = token_ids_0 + token_ids_1 + [self.get_command("<eos>")]
         return token_ids_0
 
-    def _pad(
-            self,
-            encoded_inputs: Union[Dict[str, EncodedInput], BatchEncoding],
-            max_length: Optional[int] = None,
-            padding_strategy: PaddingStrategy = PaddingStrategy.DO_NOT_PAD,
-            pad_to_multiple_of: Optional[int] = None,
-            return_attention_mask: Optional[bool] = None,
-    ) -> dict:
+    def _pad(self,
+             encoded_inputs: Union[Dict[str, EncodedInput], BatchEncoding],
+             max_length: Optional[int] = None,
+             padding_strategy: PaddingStrategy = PaddingStrategy.DO_NOT_PAD,
+             pad_to_multiple_of: Optional[int] = None,
+             return_attention_mask: Optional[bool] = None) -> dict:
         """
         Pad encoded inputs (on left/right and up to predefined length or max length in the batch)
 
