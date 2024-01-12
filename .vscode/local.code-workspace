@@ -79,7 +79,7 @@
                 "request": "launch",
                 "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_ptuning.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
-                "justMyCode": true
+                "justMyCode": false
             }
         ],
         "compounds": []
