@@ -96,13 +96,11 @@ def main():
     model = ChatGLMForConditionalGeneration(config=config)
 
     label_pad_token_id = -100 if ignore_pad_token_for_loss else tokenizer.pad_token_id
-    data_collator = DataCollatorForSeq2Seq(  # TODO 这个需要熟悉一下
-        tokenizer,
-        model=model,
-        label_pad_token_id=label_pad_token_id,
-        pad_to_multiple_of=None,
-        padding=False
-    )
+    data_collator = DataCollatorForSeq2Seq(tokenizer,
+                                           model=model,
+                                           label_pad_token_id=label_pad_token_id,
+                                           pad_to_multiple_of=None,
+                                           padding=False)
 
     train_dataloader = DataLoader(dataset=train_dataset,
                                   batch_size=1,
