@@ -5,8 +5,10 @@ from modeling_chatglm import ChatGLMModel
 from tokenization_chatglm import ChatGLMTokenizer
 import torch
 
+torch.set_printoptions(linewidth=500)  # 方便阅读
+
 data_dir = os.getenv("my_data_dir")
-model_path = os.path.normpath(os.path.join(data_dir, 'pretrained', 'THUDM/chatglm2-6b'))
+model_path = os.path.normpath(os.path.join(data_dir, 'pretrained', 'THUDM', 'chatglm2-6b'))
 print(model_path)
 
 def debug_tokenizer():
@@ -18,13 +20,14 @@ def debug_tokenizer():
     
     txt = '同志们好！'
     tokens = tokenizer.tokenize(txt) # 分词
-    print(tokens)
+    print("tokens = ", tokens, sep='\n', end='\n\n')
 
     token_ids = tokenizer.convert_tokens_to_ids(tokens=tokens)
-    print(token_ids)
+    print("token_ids = ", token_ids, sep='\n', end='\n\n')
 
     input_ids = tokenizer.encode(text=txt)
-    print(input_ids)
+    print("input_ids = ", input_ids, sep='\n', end='\n\n')
+
     print(tokenizer.convert_ids_to_tokens(input_ids))
     ...
 
@@ -42,8 +45,7 @@ def debug_model_config():
     config = ChatGLMConfig()
     print("ChatGLMConfig() = ", config, sep='\n', end='\n\n')
 
-
-def debug_model():
+def debug_model_forward():
     """
     模型在 modeling_chatglm.py 中。 
     """
@@ -62,8 +64,14 @@ def debug_model():
     input_ids = tokenizer.encode(txt, return_tensors='pt')
     
     result = model.forward(input_ids)
-    print("result = ", result, sep='\n', end='\n\n')
-    ...
+
+    for key, value in result.items():
+        if torch.is_tensor(value):
+            print(key, value, sep='\n', end='\n\n')
+        if isinstance(value, tuple):
+            for idx, (past_key, past_value) in enumerate(value):
+                print(f"{key} {idx}", "past_key = ", past_key, "past_value = ", past_value, sep='\n', end='\n\n')
+    
 
 
 def debug_pretrained_model():
@@ -87,5 +95,5 @@ def debug_pretrained_model():
 if __name__ == "__main__":
     # debug_tokenizer()
     # debug_model_config()
-    debug_model()
+    debug_model_forward()
     ...
