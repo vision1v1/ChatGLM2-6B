@@ -66,18 +66,18 @@
                 "justMyCode": false
             },
             {
-                "name": "test.py",
+                "name": "debug_chatglm.py",
                 "type": "python",
                 "request": "launch",
-                "program": "${workspaceFolder:ChatGLM2-6B}/debug/test.py",
+                "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_chatglm.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
                 "justMyCode": true
             },
             {
-                "name": "debug_model.py",
+                "name": "debug_ptuning.py",
                 "type": "python",
                 "request": "launch",
-                "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_model.py",
+                "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_ptuning.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
                 "justMyCode": true
             }
