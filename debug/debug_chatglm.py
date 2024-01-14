@@ -108,7 +108,7 @@ def debug_gen():
     max_target_length = 128
     max_seq_length = max_source_length + max_target_length + 1
 
-    a_ids = tokenizer.encode(text=prompt, add_special_tokens=True, truncation=True, max_length=max_source_length)
+    a_ids = tokenizer.encode(text=prompt, add_special_tokens=True, truncation=True, max_length=max_source_length) # encode 返回的就是 input_ids
     b_ids = tokenizer.encode(text=answer, add_special_tokens=False, truncation=True, max_length=max_target_length)
 
     context_length = len(a_ids)  # 上下文长度
