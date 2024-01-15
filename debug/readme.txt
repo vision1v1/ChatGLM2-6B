@@ -3,7 +3,7 @@ ChatGLMForConditionalGeneration ---> 特定任务架构
     1 ChatGLMModel ---> 模型的整体架构
         1 Embedding
         2 RotaryEmbedding
-        3 GLMTransformer
+        3 GLMTransformer ---> encoder
             1 GLMBlock xN
                 1 RMSNorm
                 2 SelfAttention
