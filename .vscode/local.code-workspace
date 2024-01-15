@@ -71,7 +71,7 @@
                 "request": "launch",
                 "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_chatglm.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
-                "justMyCode": false
+                "justMyCode": true
             },
             {
                 "name": "debug_ptuning.py",
