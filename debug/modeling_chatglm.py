@@ -71,20 +71,20 @@ class PrefixEncoder(torch.nn.Module):
         if self.prefix_projection:
             # Use a two-layer MLP to encode the prefix
             kv_size = config.num_layers * config.kv_channels * config.multi_query_group_num * 2
-            self.embedding = torch.nn.Embedding(config.pre_seq_len, kv_size)
-            self.trans = torch.nn.Sequential(torch.nn.Linear(kv_size, config.hidden_size),
-                                             torch.nn.Tanh(),
-                                             torch.nn.Linear(config.hidden_size, kv_size))
+            self.embedding = nn.Embedding(config.pre_seq_len, kv_size)
+            self.trans = nn.Sequential(nn.Linear(kv_size, config.hidden_size),
+                                       nn.Tanh(),
+                                       nn.Linear(config.hidden_size, kv_size))
         else:
-            self.embedding = torch.nn.Embedding(config.pre_seq_len,
-                                                config.num_layers * config.kv_channels * config.multi_query_group_num * 2)
+            self.embedding = nn.Embedding(config.pre_seq_len,
+                                          config.num_layers * config.kv_channels * config.multi_query_group_num * 2)
 
     def forward(self, prefix: torch.Tensor):
         if self.prefix_projection:
-            prefix_tokens = self.embedding(prefix)
-            past_key_values = self.trans(prefix_tokens)
+            prefix_tokens = self.embedding.forward(prefix)
+            past_key_values = self.trans.forward(prefix_tokens)
         else:
-            past_key_values = self.embedding(prefix)
+            past_key_values = self.embedding.forward(prefix)
         return past_key_values
 
 
@@ -149,7 +149,7 @@ class RotaryEmbedding(nn.Module):
         return self.forward_impl(max_seq_len, self.dim, dtype=self.inv_freq.dtype, device=self.inv_freq.device)
 
 
-@torch.jit.script
+# @torch.jit.script
 def apply_rotary_pos_emb(x: torch.Tensor, rope_cache: torch.Tensor) -> torch.Tensor:
     # x: [sq, b, np, hn]
     sq, b, np, hn = x.size(0), x.size(1), x.size(2), x.size(3)
@@ -170,10 +170,10 @@ def apply_rotary_pos_emb(x: torch.Tensor, rope_cache: torch.Tensor) -> torch.Ten
     return torch.cat((x_out2, x_pass), dim=-1)
 
 
-class RMSNorm(torch.nn.Module):
+class RMSNorm(nn.Module):
     def __init__(self, normalized_shape, eps=1e-5, device=None, dtype=None, **kwargs):
         super().__init__()
-        self.weight = torch.nn.Parameter(torch.empty(normalized_shape, device=device, dtype=dtype))
+        self.weight = nn.Parameter(torch.empty(normalized_shape, device=device, dtype=dtype))
         self.eps = eps
 
     def forward(self, hidden_states: torch.Tensor):
@@ -184,7 +184,7 @@ class RMSNorm(torch.nn.Module):
         return (self.weight * hidden_states).to(input_dtype)
 
 
-class CoreAttention(torch.nn.Module):
+class CoreAttention(nn.Module):
     def __init__(self, config: ChatGLMConfig, layer_number):
         super(CoreAttention, self).__init__()
 
@@ -208,24 +208,24 @@ class CoreAttention(torch.nn.Module):
             self.norm_factor *= coeff
         self.coeff = coeff
 
-        self.attention_dropout = torch.nn.Dropout(config.attention_dropout)
+        self.attention_dropout = nn.Dropout(config.attention_dropout)
 
     def forward(self, query_layer, key_layer, value_layer, attention_mask):
         pytorch_major_version = int(torch.__version__.split('.')[0])
         if pytorch_major_version >= 2:
             query_layer, key_layer, value_layer = [k.permute(1, 2, 0, 3) for k in [query_layer, key_layer, value_layer]]
             if attention_mask is None and query_layer.shape[2] == key_layer.shape[2]:
-                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer,
-                                                                                 key_layer,
-                                                                                 value_layer,
-                                                                                 is_causal=True)
+                context_layer = F.scaled_dot_product_attention(query_layer,
+                                                               key_layer,
+                                                               value_layer,
+                                                               is_causal=True)
             else:
                 if attention_mask is not None:
                     attention_mask = ~attention_mask
-                context_layer = torch.nn.functional.scaled_dot_product_attention(query_layer,
-                                                                                 key_layer,
-                                                                                 value_layer,
-                                                                                 attention_mask)
+                context_layer = F.scaled_dot_product_attention(query_layer,
+                                                               key_layer,
+                                                               value_layer,
+                                                               attention_mask)
             context_layer = context_layer.permute(2, 0, 1, 3)
             new_context_layer_shape = context_layer.size()[:-2] + (self.hidden_size_per_partition,)
             context_layer = context_layer.reshape(*new_context_layer_shape)
@@ -267,8 +267,7 @@ class CoreAttention(torch.nn.Module):
             if self.coeff is not None:
                 attention_scores = attention_scores * self.coeff
             if attention_mask is None and attention_scores.shape[2] == attention_scores.shape[3]:
-                attention_mask = torch.ones(output_size[0], 1, output_size[2], output_size[3],
-                                            device=attention_scores.device, dtype=torch.bool)
+                attention_mask = torch.ones(output_size[0], 1, output_size[2], output_size[3], device=attention_scores.device, dtype=torch.bool)
                 attention_mask.tril_()
                 attention_mask = ~attention_mask
             if attention_mask is not None:
@@ -305,7 +304,7 @@ class CoreAttention(torch.nn.Module):
         return context_layer
 
 
-class SelfAttention(torch.nn.Module):
+class SelfAttention(nn.Module):
     """Parallel self-attention layer abstract class.
 
     Self-attention layer takes input with size [s, b, h]
@@ -382,8 +381,7 @@ class SelfAttention(torch.nn.Module):
                 key_layer.size()[:-1] + (self.num_multi_query_groups_per_partition, self.hidden_size_per_attention_head)
             )
             value_layer = value_layer.view(
-                value_layer.size()[:-1]
-                + (self.num_multi_query_groups_per_partition, self.hidden_size_per_attention_head)
+                value_layer.size()[:-1] + (self.num_multi_query_groups_per_partition, self.hidden_size_per_attention_head)
             )
         else:
             new_tensor_shape = mixed_x_layer.size()[:-1] + (self.num_attention_heads_per_partition, 3 * self.hidden_size_per_attention_head)
@@ -480,10 +478,10 @@ class MLP(torch.nn.Module):
 
     def forward(self, hidden_states):
         # [s, b, 4hp]
-        intermediate_parallel = self.dense_h_to_4h(hidden_states)
+        intermediate_parallel = self.dense_h_to_4h.forward(hidden_states)
         intermediate_parallel = self.activation_func(intermediate_parallel)
         # [s, b, h]
-        output = self.dense_4h_to_h(intermediate_parallel)
+        output = self.dense_4h_to_h.forward(intermediate_parallel)
         return output
 
 
@@ -540,14 +538,14 @@ class GLMBlock(torch.nn.Module):
         else:
             residual = hidden_states
 
-        layernorm_input = torch.nn.functional.dropout(attention_output, p=self.hidden_dropout, training=self.training)
+        layernorm_input = F.dropout(attention_output, p=self.hidden_dropout, training=self.training)
         layernorm_input = residual + layernorm_input
 
         # Layer norm post the self attention.
-        layernorm_output = self.post_attention_layernorm(layernorm_input)
+        layernorm_output = self.post_attention_layernorm.forward(layernorm_input)
 
         # MLP.
-        mlp_output = self.mlp(layernorm_output)
+        mlp_output = self.mlp.forward(layernorm_output)
 
         # Second residual connection.
         if self.apply_residual_connection_post_layernorm:
@@ -555,7 +553,7 @@ class GLMBlock(torch.nn.Module):
         else:
             residual = layernorm_input
 
-        output = torch.nn.functional.dropout(mlp_output, p=self.hidden_dropout, training=self.training)
+        output = F.dropout(mlp_output, p=self.hidden_dropout, training=self.training)
         output = residual + output
 
         return output, kv_cache
@@ -577,7 +575,7 @@ class GLMTransformer(torch.nn.Module):
         def build_layer(layer_number):
             return GLMBlock(config, layer_number, device=device)
 
-        self.layers = torch.nn.ModuleList([build_layer(i + 1) for i in range(self.num_layers)])
+        self.layers = nn.ModuleList([build_layer(i + 1) for i in range(self.num_layers)])
 
         if self.post_layer_norm:
             LayerNormFunc = RMSNorm if config.rmsnorm else LayerNorm
@@ -592,15 +590,14 @@ class GLMTransformer(torch.nn.Module):
     def _get_layer(self, layer_number):
         return self.layers[layer_number]
 
-    def forward(self,
-                hidden_states,  # inputs_embeds
-                attention_mask,
-                rotary_pos_emb,
-                kv_caches=None,
-                use_cache: Optional[bool] = True,
-                output_hidden_states: Optional[bool] = False):
+    def forward(self, hidden_states, attention_mask, rotary_pos_emb, kv_caches=None, use_cache: Optional[bool] = True, output_hidden_states: Optional[bool] = False):
+        """
+        hidden_states: input_embedding, shape = [193,1,4096]. rotary_pos_emb shape = [193,1,32,2]
+        """
+
         if not kv_caches:
             kv_caches = [None for _ in range(self.num_layers)]
+
         presents = () if use_cache else None
         if self.gradient_checkpointing and self.training:
             if use_cache:
@@ -622,11 +619,7 @@ class GLMTransformer(torch.nn.Module):
                                                               kv_caches[index],
                                                               use_cache)
             else:
-                layer_ret = layer.forward(hidden_states,
-                                          attention_mask,
-                                          rotary_pos_emb,
-                                          kv_cache=kv_caches[index],
-                                          use_cache=use_cache)
+                layer_ret = layer.forward(hidden_states, attention_mask, rotary_pos_emb, kv_cache=kv_caches[index], use_cache=use_cache)
             hidden_states, kv_cache = layer_ret
             if use_cache:
                 presents = presents + (kv_cache,)
@@ -636,7 +629,7 @@ class GLMTransformer(torch.nn.Module):
 
         # Final layer norm.
         if self.post_layer_norm:
-            hidden_states = self.final_layernorm(hidden_states)
+            hidden_states = self.final_layernorm.forward(hidden_states)
 
         return hidden_states, presents, all_hidden_states, all_self_attentions
 
@@ -700,7 +693,7 @@ class Embedding(torch.nn.Module):
 
     def forward(self, input_ids):
         # Embeddings.
-        words_embeddings = self.word_embeddings(input_ids)  # (bsz, seq_len, hidden_size)
+        words_embeddings = self.word_embeddings.forward(input_ids)  # (bsz, seq_len, hidden_size)
         embeddings = words_embeddings
         # Data format change to avoid explicit tranposes : [b s h] --> [s b h].
         embeddings = embeddings.transpose(0, 1).contiguous()
@@ -720,29 +713,28 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         init_kwargs = {}
         if device is not None:
             init_kwargs["device"] = device
-        self.embedding = init_method(Embedding, config, **init_kwargs)
+        self.embedding: Embedding = init_method(Embedding, config, **init_kwargs)
         self.num_layers = config.num_layers
         self.multi_query_group_num = config.multi_query_group_num
-        self.kv_channels = config.kv_channels
+        self.kv_channels = config.kv_channels  # 相当于每个头的 hidden_size
 
         # Rotary positional embeddings
         self.seq_length = config.seq_length  # RoPE 的最大的句子长度。
-        rotary_dim = (  # 每个头的hidden_size
-            config.hidden_size // config.num_attention_heads if config.kv_channels is None else config.kv_channels
-        )
+        # 每个头的hidden_size
+        rotary_dim = config.hidden_size // config.num_attention_heads if config.kv_channels is None else config.kv_channels
 
         self.rotary_pos_emb = RotaryEmbedding(rotary_dim // 2,  # q0 q1 为一组，后面一样，两个为一组。
                                               original_impl=config.original_rope,
                                               device=device,
                                               dtype=config.torch_dtype)
 
-        self.encoder = init_method(GLMTransformer, config, **init_kwargs)
-        self.output_layer = init_method(nn.Linear,
-                                        config.hidden_size,
-                                        config.padded_vocab_size,
-                                        bias=False,
-                                        dtype=config.torch_dtype,
-                                        **init_kwargs)
+        self.encoder: GLMTransformer = init_method(GLMTransformer, config, **init_kwargs)
+        self.output_layer: nn.Linear = init_method(nn.Linear,
+                                                   config.hidden_size,
+                                                   config.padded_vocab_size,
+                                                   bias=False,
+                                                   dtype=config.torch_dtype,
+                                                   **init_kwargs)
         self.pre_seq_len = config.pre_seq_len
         self.prefix_projection = config.prefix_projection
         if self.pre_seq_len is not None:
@@ -801,18 +793,18 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         # Rotary positional embeddings，这里self.seq_length 是RoPE能编码的最大句子长度。
         rotary_pos_emb = self.rotary_pos_emb.forward(self.seq_length)  # TODO 旋转位置编码 (seq_len, hidden_size_per_head // 2, 2)
         if position_ids is not None:
-            rotary_pos_emb = rotary_pos_emb[position_ids]  # (bsz, seq_len, )
+            rotary_pos_emb = rotary_pos_emb[position_ids]  # (bsz, seq_len, hidden_size_per_head // 2 , 2) = [1, 193, 32, 2]
         else:
             rotary_pos_emb = rotary_pos_emb[None, :seq_length]
-        rotary_pos_emb = rotary_pos_emb.transpose(0, 1).contiguous()
+        rotary_pos_emb = rotary_pos_emb.transpose(0, 1).contiguous() # (seq_len, bsz, h_per_head//2, 2)
 
         # Run encoder.
-        hidden_states, presents, all_hidden_states, all_self_attentions = self.encoder(inputs_embeds,
-                                                                                       full_attention_mask,
-                                                                                       rotary_pos_emb=rotary_pos_emb,
-                                                                                       kv_caches=past_key_values,
-                                                                                       use_cache=use_cache,
-                                                                                       output_hidden_states=output_hidden_states)
+        hidden_states, presents, all_hidden_states, all_self_attentions = self.encoder.forward(inputs_embeds,
+                                                                                               full_attention_mask,
+                                                                                               rotary_pos_emb=rotary_pos_emb,
+                                                                                               kv_caches=past_key_values,
+                                                                                               use_cache=use_cache,
+                                                                                               output_hidden_states=output_hidden_states)
 
         if not return_dict:
             return tuple(v for v in [hidden_states, presents, all_hidden_states, all_self_attentions] if v is not None)
@@ -903,19 +895,19 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
         use_cache = use_cache if use_cache is not None else self.config.use_cache
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        transformer_outputs = self.transformer(input_ids=input_ids,
-                                               position_ids=position_ids,
-                                               attention_mask=attention_mask,
-                                               past_key_values=past_key_values,
-                                               inputs_embeds=inputs_embeds,
-                                               use_cache=use_cache,
-                                               output_hidden_states=output_hidden_states,
-                                               return_dict=return_dict)
+        transformer_outputs = self.transformer.forward(input_ids=input_ids,
+                                                       position_ids=position_ids,
+                                                       attention_mask=attention_mask,
+                                                       past_key_values=past_key_values,
+                                                       inputs_embeds=inputs_embeds,
+                                                       use_cache=use_cache,
+                                                       output_hidden_states=output_hidden_states,
+                                                       return_dict=return_dict)
 
         hidden_states = transformer_outputs[0]
         if return_last_logit:
             hidden_states = hidden_states[-1:]
-        lm_logits = self.transformer.output_layer(hidden_states)
+        lm_logits = self.transformer.output_layer.forward(hidden_states)
         lm_logits = lm_logits.transpose(0, 1).contiguous()
 
         loss = None  # 如果是推理，loss为None
@@ -936,13 +928,11 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
             output = (lm_logits,) + transformer_outputs[1:]
             return ((loss,) + output) if loss is not None else output
 
-        return CausalLMOutputWithPast(
-            loss=loss,
-            logits=lm_logits,
-            past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
-        )
+        return CausalLMOutputWithPast(loss=loss,
+                                      logits=lm_logits,
+                                      past_key_values=transformer_outputs.past_key_values,
+                                      hidden_states=transformer_outputs.hidden_states,
+                                      attentions=transformer_outputs.attentions)
 
     @staticmethod
     def _reorder_cache(past: Tuple[Tuple[torch.Tensor, torch.Tensor], ...],
@@ -1140,12 +1130,10 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
         while True:
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
             # forward pass to get next token
-            outputs = self(
-                **model_inputs,
-                return_dict=True,
-                output_attentions=False,
-                output_hidden_states=False,
-            )
+            outputs = self.forward(**model_inputs,
+                                   return_dict=True,
+                                   output_attentions=False,
+                                   output_hidden_states=False)
 
             next_token_logits = outputs.logits[:, -1, :]
 
@@ -1154,7 +1142,7 @@ class ChatGLMForConditionalGeneration(ChatGLMPreTrainedModel):
             next_token_scores = logits_warper(input_ids, next_token_scores)
 
             # sample
-            probs = nn.functional.softmax(next_token_scores, dim=-1)
+            probs = F.softmax(next_token_scores, dim=-1)
             if generation_config.do_sample:
                 next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
             else:
@@ -1226,15 +1214,15 @@ class ChatGLMForSequenceClassification(ChatGLMPreTrainedModel):
                 return_dict: Optional[bool] = None) -> Union[Tuple[torch.Tensor, ...], SequenceClassifierOutputWithPast]:
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        transformer_outputs = self.transformer(input_ids=input_ids,
-                                               position_ids=position_ids,
-                                               attention_mask=attention_mask,
-                                               full_attention_mask=full_attention_mask,
-                                               past_key_values=past_key_values,
-                                               inputs_embeds=inputs_embeds,
-                                               use_cache=use_cache,
-                                               output_hidden_states=output_hidden_states,
-                                               return_dict=return_dict)
+        transformer_outputs = self.transformer.forward(input_ids=input_ids,
+                                                       position_ids=position_ids,
+                                                       attention_mask=attention_mask,
+                                                       full_attention_mask=full_attention_mask,
+                                                       past_key_values=past_key_values,
+                                                       inputs_embeds=inputs_embeds,
+                                                       use_cache=use_cache,
+                                                       output_hidden_states=output_hidden_states,
+                                                       return_dict=return_dict)
 
         hidden_states = transformer_outputs[0]
         pooled_hidden_states = hidden_states[-1]
