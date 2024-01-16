@@ -80,6 +80,14 @@
                 "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_ptuning.py",
                 "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
                 "justMyCode": false
+            },
+            {
+                "name": "debug_attention.py",
+                "type": "python",
+                "request": "launch",
+                "program": "${workspaceFolder:ChatGLM2-6B}/debug/debug_attention.py",
+                "cwd": "${workspaceFolder:ChatGLM2-6B}/debug",
+                "justMyCode": true
             }
         ],
         "compounds": []
