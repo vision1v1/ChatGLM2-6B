@@ -319,11 +319,11 @@ class SelfAttention(nn.Module):
 
         # Per attention head and per partition values.
         self.hidden_size_per_attention_head = self.projection_size // config.num_attention_heads
-        self.num_attention_heads_per_partition = config.num_attention_heads
+        self.num_attention_heads_per_partition = config.num_attention_heads # TODO per_partition  什么意思? 这里就是头数。
 
         self.multi_query_attention = config.multi_query_attention
-        self.qkv_hidden_size = 3 * self.projection_size
-        if self.multi_query_attention:
+        self.qkv_hidden_size = 3 * self.projection_size # MHA
+        if self.multi_query_attention: # MQA
             self.num_multi_query_groups_per_partition = config.multi_query_group_num
             self.qkv_hidden_size = self.projection_size + 2 * self.hidden_size_per_attention_head * config.multi_query_group_num
 
@@ -799,7 +799,7 @@ class ChatGLMModel(ChatGLMPreTrainedModel):
         rotary_pos_emb = rotary_pos_emb.transpose(0, 1).contiguous() # (seq_len, bsz, h_per_head//2, 2)
 
         # Run encoder.
-        hidden_states, presents, all_hidden_states, all_self_attentions = self.encoder.forward(inputs_embeds,
+        hidden_states, presents, all_hidden_states, all_self_attentions = self.encoder.forward(inputs_embeds, # [193,1,4096]
                                                                                                full_attention_mask,
                                                                                                rotary_pos_emb=rotary_pos_emb,
                                                                                                kv_caches=past_key_values,
