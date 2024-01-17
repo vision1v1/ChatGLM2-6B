@@ -7,6 +7,7 @@ from einops import rearrange
 
 from typing import Optional
 
+# 参考 https://zhuanlan.zhihu.com/p/634236135?utm_id=0
 
 def scaled_multihead_dot_product_attention(
     query,
