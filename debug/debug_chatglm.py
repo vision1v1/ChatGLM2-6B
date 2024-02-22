@@ -13,30 +13,7 @@ model_path = os.path.normpath(os.path.join(data_dir, 'pretrained', 'THUDM', 'cha
 print(model_path)
 
 
-def debug_tokenizer():
-    """
-    调试分词，使用的 SentencePieceProcessor
-    TODO 如何训练 tokenizer.model
-    """
-    # tokenizer = ChatGLMTokenizer.from_pretrained(model_path)
-    tokenizer = ChatGLMTokenizer(vocab_file=os.path.join(model_path, 'tokenizer.model'))
 
-    txt = '同志们好！'
-    tokens = tokenizer.tokenize(txt)  # 分词
-    print("tokens = ", tokens, sep='\n', end='\n\n')
-
-    sp_tokenizer = SPTokenizer(model_path=os.path.join(model_path, 'tokenizer.model'))
-    tokens = sp_tokenizer.tokenize(txt)
-    print("tokens = ", tokens, sep='\n', end='\n\n')
-
-    # token_ids = tokenizer.convert_tokens_to_ids(tokens=tokens)
-    # print("token_ids = ", token_ids, sep='\n', end='\n\n')
-
-    # input_ids = tokenizer.encode(text=txt)
-    # print("input_ids = ", input_ids, sep='\n', end='\n\n')
-
-    # print(tokenizer.convert_ids_to_tokens(input_ids))
-    ...
 
 
 def debug_model_config():
@@ -153,7 +130,6 @@ def debug_pretrained_model():
 
 
 if __name__ == "__main__":
-    # debug_tokenizer()
     # debug_model_config()
     # debug_model_forward()
     debug_gen()
