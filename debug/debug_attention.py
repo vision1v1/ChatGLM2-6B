@@ -26,9 +26,9 @@ def scaled_multihead_dot_product_attention(
 ):
     q = rearrange(query, 'b s (h d) -> b h s d', h=n_heads)         # (1, 512, 768) -> (1, 8, 512, 96)
     kv_n_heads = 1 if multiquery else n_heads
-    k = rearrange(key, 'b s (h d) -> b h d s', h=kv_n_heads)        # (1, 512, 768) -> (1, 8, 96, 512) if not multiquery
+    k = rearrange(key, 'b s (h d) -> b h d s', h=kv_n_heads)        # (1, 512, 768) -> (1, 8, 96, 512) if not multiquery, (1, 1, 96, 512) else
     # (1, 512, 96) -> (1, 1, 96, 512)  if multiquery
-    v = rearrange(value, 'b s (h d) -> b h s d', h=kv_n_heads)      # (1, 512, 768) -> (1, 8, 512, 96) if not multiquery
+    v = rearrange(value, 'b s (h d) -> b h s d', h=kv_n_heads)      # (1, 512, 768) -> (1, 8, 512, 96) if not multiquery, (1, 1, 512, 96) else
     # (1, 512, 96) -> (1, 1, 512, 96)  if multiquery
 
     attn_weight = q.matmul(k) * softmax_scale                       # (1, 8, 512, 512) (b h s s)
@@ -154,7 +154,7 @@ class MultiQueryAttention(nn.Module):
 
         self.Wqkv = nn.Linear(
             d_model,
-            d_model + 2 * self.head_dim,
+            d_model + 2 * self.head_dim, # 所有key共用一个头，所有v共用一个头。所以这里 *2
             device=device,
         )
 
